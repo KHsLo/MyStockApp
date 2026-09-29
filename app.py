@@ -15,8 +15,8 @@ import streamlit as st
 from datetime import datetime, timedelta
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-ROOT_DIR = os.path.dirname(CURRENT_DIR)
-OUTPUT_DIR = os.path.join(ROOT_DIR, "scanner_output")
+# 直接把根目錄當作讀取區，不再往內尋找 scanner_output 資料夾
+OUTPUT_DIR = CURRENT_DIR
 
 
 # =========================
