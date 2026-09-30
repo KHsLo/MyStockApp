@@ -549,15 +549,7 @@ def build_sidebar():
 def main():
     st.set_page_config(page_title="股票篩選器", layout="wide")
     st.title("📈 simply_report 股票篩選器")
-
-    # ========= 請加入這 4 行除錯程式碼 =========
-    st.write(f"🚨 **系統偵測資料夾存在嗎？** {os.path.exists(OUTPUT_DIR)}")
-    if os.path.exists(OUTPUT_DIR):
-        st.write(f"📁 **資料夾內實際長這樣的檔案：** {os.listdir(OUTPUT_DIR)}")
-    else:
-        st.write(f"根目錄有這些東西： {os.listdir(CURRENT_DIR)}")
-    # =========================================
-
+   
     build_sidebar()
 
     tab1, tab2, tab3 = st.tabs(["🔵 日線", "🟢 週線", "🔀 日週交集"])
