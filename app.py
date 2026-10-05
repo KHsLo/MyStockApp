@@ -66,9 +66,13 @@ CATEGORICAL_FIELDS = [
     ('突破狀態',
      ['已突破', '接近', '未突破', '已跌破', '未跌破'],
      False, ['已突破', '接近']),
-    # ★ 均線色帶條件（可篩選）
-    ('滿足最後交易日均線色帶條件', ['O', 'X'], False, ['O']),
-    # ★ CCI 穿越 100（可篩選）
+    # 均線 TP 條件（可篩選）
+    ('滿足最後交易日均線TP條件', ['O', 'X'], False, ['O']),
+    # TP3線糾結K棒型態（可篩選）
+    ('TP3線糾結K棒型態', ['紅K棒', '綠K棒'], False, ['紅K棒']),
+    # 標準3線糾結K棒型態（可篩選）
+    ('標準3線糾結K棒型態', ['紅K棒', '綠K棒'], False, ['紅K棒']),
+    # CCI 穿越 100（可篩選）
     ('滿足最後交易日CCI穿越100', ['O', 'X'], False, ['O']),
 ]
 
@@ -80,6 +84,10 @@ NUMERIC_FIELDS_COMMON = [
     ('StochRSI_K', -100.0, 200.0, (0.0, 80.0), 1.0, True),
     ('RSI（14）', 0.0, 100.0, (0.0, 80.0), 1.0, True),
     ('當時J值', -100.0, 200.0, (0.0, 80.0), 1.0, True),
+    # ★ 新增：最後交易日TP3線糾結（單位：比值，通常 < 0.1）
+    ('最後交易日TP3線糾結', 0.0, 1.0, (0.0, 1.0), 0.001, False),
+    # ★ 新增：最後交易日標準3線糾結（單位：比值）
+    ('最後交易日標準3線糾結', 0.0, 1.0, (0.0, 1.0), 0.001, False),
 ]
 
 # 數值型欄位（換手率，日線/週線不同）
@@ -617,7 +625,7 @@ def render_tab_ma_ribbon(period_label, key_prefix, title):
         return
 
     # ---- 檢查欄位是否存在 ----
-    col_ribbon = '滿足最後交易日均線色帶條件'
+    col_ribbon = '滿足最後交易日均線TP條件'
     if col_ribbon not in df.columns:
         st.error(
             f"❌ 此日期檔案缺少欄位：{col_ribbon}\n\n"
@@ -630,12 +638,12 @@ def render_tab_ma_ribbon(period_label, key_prefix, title):
     df_filtered = df[mask].copy()
 
     if df_filtered.empty:
-        st.warning("🔍 此日期無符合『最後交易日均線色帶條件』的個股")
+        st.warning("🔍 此日期無符合『最後交易日均線TP條件』的個股")
         return
 
     st.caption(
         f"📂 simply_report_{date_str}_{period_label}.xlsx "
-        f"（原始 {len(df)} 檔 → 均線色帶 **{len(df_filtered)} 檔**）"
+        f"（原始 {len(df)} 檔 → 均線TP **{len(df_filtered)} 檔**）"
     )
 
     # ---- 沿用 Tab1/Tab2 的篩選 UI ----
@@ -896,13 +904,13 @@ def render_tab_intersection_3line():
 # Tab 9：日週均線色帶交集
 # =========================
 def render_tab_intersection_ribbon():
-    st.header("🔀 日週均線色帶交集")
+    st.header("🔀 日週均線TP交集")
 
     df_d = st.session_state.get('daily_ribbon_result')
     df_w = st.session_state.get('weekly_ribbon_result')
 
     if df_d is None or df_w is None:
-        st.info("👈 請先在「日線均線色帶」與「週線均線色帶」分別執行篩選，"
+        st.info("👈 請先在「日線均線TP」與「週線均線TP」分別執行篩選，"
                 "交集結果會自動顯示在這裡")
         return
 
@@ -1061,7 +1069,7 @@ def main():
      tab7, tab8, tab9, tab10, tab11, tab12) = st.tabs([
         "🔵 日線", "🟢 週線", "🔀 日週交集",
         "🎯 日線3線糾結", "🎯 週線3線糾結", "🎯 日週3線交集",
-        "🎯 日線均線色帶", "🎯 週線均線色帶", "🎯 日週均線色帶交集",
+        "🎯 日線均線TP", "🎯 週線均線TP", "🎯 日週均線TP交集",
         "🎯 日線CCI穿越100", "🎯 週線CCI穿越100", "🎯 日週CCI交集",
     ])
     with tab1:
@@ -1077,9 +1085,9 @@ def main():
     with tab6:
         render_tab_intersection_3line()
     with tab7:
-        render_tab_ma_ribbon('daily', 'daily_ribbon', "🎯 日線 均線色帶")
+        render_tab_ma_ribbon('daily', 'daily_ribbon', "🎯 日線 均線TP")
     with tab8:
-        render_tab_ma_ribbon('weekly', 'weekly_ribbon', "🎯 週線 均線色帶")
+        render_tab_ma_ribbon('weekly', 'weekly_ribbon', "🎯 週線 均線TP")
     with tab9:
         render_tab_intersection_ribbon()
     with tab10:
