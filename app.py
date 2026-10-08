@@ -52,6 +52,12 @@ CATEGORICAL_FIELDS = [
       '偏強', '強勢', '超買／強勢', '極度超買', '資料不足'],
      True,
      ['極度超賣', '超賣', '弱勢反彈／超賣修復', '偏弱', '中性', '偏強']),
+    # ★ NEW：RSI（14）等級（預設與 StochRSI 相同）
+    ('RSI（14）等級',
+     ['極度超賣', '超賣', '弱勢反彈／超賣修復', '偏弱', '中性',
+      '偏強', '強勢', '超買／強勢', '極度超買', '資料不足'],
+     True,
+     ['極度超賣', '超賣', '弱勢反彈／超賣修復', '偏弱', '中性', '偏強']),
     ('stochRSI最近交叉方向', ['金叉', '死叉'], True, ['金叉']),
     ('StochRSI_K_趨勢',
      ['明顯上升', '緩步上升', '持平', '緩步下降', '明顯下降'],
@@ -61,33 +67,41 @@ CATEGORICAL_FIELDS = [
     ('J線方向', ['上升', '下降', '持平'], True, ['上升', '持平']),
     ('MFI方向', ['上升', '下降', '持平'], True, ['上升', '持平']),
     ('OBV方向', ['上升', '下降', '持平'], True, ['上升', '持平']),
-    # ★ 移除：型態等級（欄位已不存在）
-    # ★ 修正：底底高加入缺U值 / 缺D值 / 缺U值及D值
+    # ★ NEW：型態（中文顯示，實際值由 CATEGORICAL_VALUE_MAP 對應）
+    ('型態', ['W型態', 'M型態', '無型態'], False, ['W型態']),
+    # 底底高（維持原樣）
     ('底底高', ['O', 'X', '缺U值', '缺D值', '缺U值及D值'], False, ['O']),
-    # ★ 修正：突破狀態移除「未接近」
+    # 突破狀態（維持原樣）
     ('突破狀態',
      ['已突破', '接近', '未突破', '已跌破', '未跌破'],
      False, ['已突破', '接近']),
-    # 均線 TP 條件（可篩選）
+    # 均線 TP 條件
     ('滿足最後交易日均線TP條件', ['O', 'X'], False, ['O']),
-    # TP3線糾結K棒型態（可篩選）
+    # TP3線糾結K棒型態
     ('TP3線糾結K棒型態', ['紅K棒', '綠K棒'], False, ['紅K棒']),
-    # 標準3線糾結K棒型態（可篩選）
+    # 標準3線糾結K棒型態
     ('標準3線糾結K棒型態', ['紅K棒', '綠K棒'], False, ['紅K棒']),
-    # CCI 穿越 100（可篩選）
+    # CCI 穿越 100
     ('滿足最後交易日CCI穿越100', ['O', 'X'], False, ['O']),
     ('PVO上穿0軸', ['O', 'X'], False, ['O']),
     ('布林突破', ['O', 'X'], False, ['O']),
-    ('布林上軌之上', ['O', 'X'], False, ['O']),
-    ('布林上軌與中軌間', ['O', 'X'], False, ['O']),
-    ('布林中軌與下軌間', ['O', 'X'], False, ['O']),
-    ('布林下軌之下', ['O', 'X'], False, ['O']),
+    # ★ NEW：Mansfield20RS>0軸
+    ('Mansfield20RS>0軸', ['O', 'X'], False, ['O']),
 ]
+
+# ★ 類別欄位的「顯示名稱 → 實際值」映射（僅型態需要）
+CATEGORICAL_VALUE_MAP = {
+    '型態': {
+        'W型態': 'W',
+        'M型態': 'M',
+        '無型態': '',
+    },
+}
 
 # 數值型欄位（共通）：(欄位名, 最小值, 最大值, 預設值, 步進, 預設勾選)
 NUMERIC_FIELDS_COMMON = [
     ('實收資本額（億）', 0.0, 10000.0, (0.0, 10000.0), 0.5, False),
-    ('符合數', 0.0, 25.0, (0.0, 25.0), 1.0, False),
+    ('符合數', 0.0, 27.0, (0.0, 27.0), 1.0, False),
     ('Hurst Exponent', 0.0, 100.0, (50.0, 100.0), 1.0, True),
     ('STC數值', -100.0, 200.0, (0.0, 80.0), 1.0, True),
     ('StochRSI_K', -100.0, 200.0, (0.0, 80.0), 1.0, True),
@@ -197,6 +211,8 @@ def build_filter_ui(df, period_label, key_prefix):
     for field, _opts, _dc, _dv in CATEGORICAL_FIELDS:
         if field in df.columns:
             all_cb_keys.append(f'{key_prefix}_cb_cat_{field}')
+    if '收>5/10/20扣' in df.columns:
+        all_cb_keys.append(f'{key_prefix}_cb_deduct_check')
     for field, _lo, _hi, _dv, _st, _dc in get_numeric_fields(period_label):
         if field in df.columns:
             all_cb_keys.append(f'{key_prefix}_cb_num_{field}')
@@ -289,6 +305,43 @@ def build_filter_ui(df, period_label, key_prefix):
                 if val:
                     filters[field] = val
 
+    # ---- ★ NEW：收>5/10/20扣（專屬 expander）----
+    if '收>5/10/20扣' in df.columns:
+        with st.expander("🎯 收>5/10/20扣", expanded=False):
+            cb_key = f'{key_prefix}_cb_deduct_check'
+            if cb_key not in st.session_state:
+                st.session_state[cb_key] = False
+            is_checked = st.checkbox(
+                '收>5/10/20扣（收盤同時大於 5/10/20MA 扣抵值）',
+                key=cb_key,
+            )
+            if is_checked:
+                val = st.multiselect(
+                    "收>5/10/20扣 選項",
+                    options=['O', 'X'],
+                    default=['O'],
+                    key=f'{key_prefix}_deduct_check_val',
+                    label_visibility='collapsed',
+                )
+                if val:
+                    filters['收>5/10/20扣'] = val
+    # ---- ★ NEW：布林四區域（selectbox 單選）----
+    boll_zone_all = ['布林上軌之上', '布林上軌與中軌間',
+                     '布林中軌與下軌間', '布林下軌之下']
+    boll_zone_present = [c for c in boll_zone_all if c in df.columns]
+    if boll_zone_present:
+        with st.expander("📊 布林四區域（單選）", expanded=False):
+            opts = ['不啟用'] + boll_zone_present
+            sel = st.selectbox(
+                "選擇布林區域（篩選最後交易日收盤落在哪一區）",
+                options=opts,
+                index=0,
+                key=f'{key_prefix}_boll_zone',
+            )
+            if sel != '不啟用':
+                filters['_boll_zone'] = sel
+
+
     # ---- 數值型欄位 ----
     with st.expander("🔢 數值型欄位", expanded=True):
         for field, lo, hi, default_val, step, default_checked in get_numeric_fields(period_label):
@@ -329,6 +382,12 @@ def apply_filters(df, filters):
                    (s >= pd.to_datetime(start)) & \
                    (s <= pd.to_datetime(end))
 
+    # ★ NEW：布林四區域（selectbox 單選，值為欄位名）
+    if '_boll_zone' in filters:
+        col = filters['_boll_zone']
+        if col in df.columns:
+            mask = mask & (df[col].astype(str).str.strip() == 'O')
+
     # 其他欄位
     for field, val in filters.items():
         if field.startswith('_'):
@@ -339,7 +398,15 @@ def apply_filters(df, filters):
             mask = mask & df[field].astype(str).str.contains(
                 val, case=False, na=False, regex=False)
         elif isinstance(val, list):
-            mask = mask & df[field].astype(str).isin([str(v) for v in val])
+            # ★ NEW：若該欄位有「顯示名稱→實際值」映射，先轉換
+            if field in CATEGORICAL_VALUE_MAP:
+                vmap = CATEGORICAL_VALUE_MAP[field]
+                raw_vals = [vmap.get(v, v) for v in val]
+                # 空字串與 NaN 都要視為「無」
+                s = df[field].fillna('').astype(str).str.strip()
+                mask = mask & s.isin([str(v) for v in raw_vals])
+            else:
+                mask = mask & df[field].astype(str).isin([str(v) for v in val])
         elif isinstance(val, tuple) and len(val) == 2:
             s = pd.to_numeric(df[field], errors='coerce')
             mask = mask & s.notna() & (s >= val[0]) & (s <= val[1])
@@ -1032,6 +1099,93 @@ def render_tab_intersection_cci():
     )
 
 # =========================
+# Tab 13：日週 Mansfield 交集
+#   - 日期鎖定為最新交易日
+#   - 硬過濾：Mansfield20RS>0軸 == 'O'（日線 + 週線各自）
+#   - 交集顯示基本 4 欄 + Mansfield20RS 數值
+# =========================
+def render_tab_intersection_mansfield():
+    st.header("🔀 日週 Mansfield 交集")
+
+    dates = list_simply_dates()
+    if not dates:
+        st.error("❌ 找不到任何 simply_report 檔案")
+        return
+    date_str = dates[0]
+    st.caption(f"📅 日期鎖定為最新交易日：**{date_str}**（此頁面不受側邊欄日期影響）")
+
+    df_d = load_simply(date_str, 'daily')
+    df_w = load_simply(date_str, 'weekly')
+    if df_d is None or df_w is None:
+        st.error(f"❌ 讀不到 simply_report_{date_str}_daily.xlsx 或 _weekly.xlsx")
+        return
+
+    col_mansfield_flag = 'Mansfield20RS>0軸'
+    col_mansfield_val  = 'Mansfield20RS'
+
+    # ---- 檢查欄位 ----
+    for df_, label, period in [(df_d, '日線', 'daily'), (df_w, '週線', 'weekly')]:
+        if col_mansfield_flag not in df_.columns:
+            st.error(
+                f"❌ {label}檔案缺少欄位：{col_mansfield_flag}\n\n"
+                f"請用新版重新產出 simply_report_{date_str}_{period}.xlsx"
+            )
+            return
+
+    # ---- 硬過濾 ----
+    df_d_f = df_d[df_d[col_mansfield_flag].astype(str).str.strip() == 'O'].copy()
+    df_w_f = df_w[df_w[col_mansfield_flag].astype(str).str.strip() == 'O'].copy()
+
+    codes_d = set(df_d_f['代號'].astype(str))
+    codes_w = set(df_w_f['代號'].astype(str))
+    common = codes_d & codes_w
+
+    st.caption(
+        f"📂 日線 Mansfield>0軸：**{len(codes_d)}** 檔"
+        f"　|　週線 Mansfield>0軸：**{len(codes_w)}** 檔"
+        f"　|　交集：**{len(common)}** 檔"
+    )
+
+    if not common:
+        st.warning("🔍 查無日週 Mansfield 交集")
+        return
+
+    st.success(f"✅ 日週 Mansfield 共振 **{len(common)} 檔**")
+
+    # ---- 顯示基本 4 欄 + Mansfield20RS ----
+    base_cols = ['代號', '公司名稱', '產業類別', '實收資本額（億）']
+    if col_mansfield_val in df_d_f.columns:
+        base_cols.append(col_mansfield_val)
+    base_cols = [c for c in base_cols if c in df_d_f.columns]
+
+    result = df_d_f[df_d_f['代號'].astype(str).isin(common)][base_cols].copy()
+    # 依 Mansfield20RS 由高到低排序（若存在）
+    if col_mansfield_val in result.columns:
+        result = result.sort_values(col_mansfield_val,
+                                    ascending=False,
+                                    na_position='last').reset_index(drop=True)
+    else:
+        result = result.reset_index(drop=True)
+
+    column_config = _build_pinned_config(result)
+
+    st.dataframe(
+        _arrow_safe(result),
+        width='stretch',
+        height=_calc_table_height(len(result)),
+        column_config=column_config,
+    )
+
+    csv = result.to_csv(index=False).encode('utf-8-sig')
+    st.download_button(
+        "📥 匯出交集結果（CSV）",
+        data=csv,
+        file_name=f"intersection_mansfield_{datetime.today().strftime('%Y%m%d')}.csv",
+        mime='text/csv',
+        key='intersection_mansfield_download_csv',
+    )
+
+# =========================
 # 側邊欄（只放全域設定）
 # =========================
 def build_sidebar():
@@ -1075,11 +1229,12 @@ def main():
     build_sidebar()
 
     (tab1, tab2, tab3, tab4, tab5, tab6,
-     tab7, tab8, tab9, tab10, tab11, tab12) = st.tabs([
+     tab7, tab8, tab9, tab10, tab11, tab12, tab13) = st.tabs([
         "🔵 日線", "🟢 週線", "🔀 日週交集",
         "🎯 日線3線糾結", "🎯 週線3線糾結", "🎯 日週3線交集",
         "🎯 日線均線TP", "🎯 週線均線TP", "🎯 日週均線TP交集",
         "🎯 日線CCI穿越100", "🎯 週線CCI穿越100", "🎯 日週CCI交集",
+        "🎯 日週Mansfield交集",
     ])
     with tab1:
         render_tab_daily()
@@ -1105,6 +1260,8 @@ def main():
         render_tab_cci('weekly', 'weekly_cci', "🎯 週線 CCI穿越100")
     with tab12:
         render_tab_intersection_cci()
+    with tab13:
+        render_tab_intersection_mansfield()
 
 
 if __name__ == "__main__":
