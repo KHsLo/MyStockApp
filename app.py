@@ -1192,6 +1192,362 @@ def render_tab_intersection_mansfield():
     )
 
 # =========================
+# Tab 14/15：丹贊格選股（日線 / 週線）
+#   - 日期鎖定為最新交易日
+#   - 硬過濾：(最後交易日sk是否大於sd == 'O') 且 (最後日期10EMA>20EMA>50SMA>200SMA == 'O')
+#   - 排序：丹贊格3線糾結值 由小到大（越小越糾結）
+#   - 缺欄位時：顯示警告 + 空表格（不終止）
+# =========================
+def render_tab_danzan(period_label, key_prefix, title):
+    st.header(title)
+
+    # ---- 日期鎖定為最新交易日 ----
+    dates = list_simply_dates()
+    if not dates:
+        st.error("❌ 找不到任何 simply_report 檔案")
+        return
+    date_str = dates[0]  # 已 reverse=True，取最新
+    st.caption(f"📅 日期鎖定為最新交易日：**{date_str}**（此頁面不受側邊欄日期影響）")
+
+    df = load_simply(date_str, period_label)
+    if df is None:
+        st.error(f"❌ 讀不到 simply_report_{date_str}_{period_label}.xlsx")
+        return
+
+    col_sk = '最後交易日sk是否大於sd'
+    col_ma = '最後日期10EMA>20EMA>50SMA>200SMA'
+    col_dz3 = '丹贊格3線糾結值'
+
+    # ---- 檢查欄位（缺欄位 → 顯示警告 + 空表格，不終止）----
+    missing = [c for c in [col_sk, col_ma] if c not in df.columns]
+    if missing:
+        st.warning(
+            f"⚠️ 此檔案缺少欄位：{'、'.join(missing)}，無法進行丹贊格硬過濾"
+        )
+        st.info(
+            f"📋 由於欄位缺失，無法進行篩選。"
+            f"請用新版重新產出 simply_report_{date_str}_{period_label}.xlsx"
+        )
+        empty_cols = [c for c in ['代號', '公司名稱', '產業類別', '實收資本額（億）']
+                      if c in df.columns]
+        st.dataframe(pd.DataFrame(columns=empty_cols), width='stretch')
+        return
+
+    # ---- 硬過濾 ----
+    mask = (df[col_sk].astype(str).str.strip() == 'O') & \
+           (df[col_ma].astype(str).str.strip() == 'O')
+    df_filtered = df[mask].copy()
+
+    if df_filtered.empty:
+        st.warning(
+            "🔍 此日期無符合『丹贊格』條件"
+            "（最後交易日sk>sd 且 10EMA>20EMA>50SMA>200SMA）的個股"
+        )
+        return
+
+    st.caption(
+        f"📂 simply_report_{date_str}_{period_label}.xlsx "
+        f"（原始 {len(df)} 檔 → 丹贊格 **{len(df_filtered)} 檔**）"
+    )
+
+    # ---- 沿用 Tab1/Tab2 的篩選 UI ----
+    filters = build_filter_ui(df_filtered, period_label, key_prefix)
+
+    run_clicked = st.button(
+        "▶️ 開始執行",
+        type='primary',
+        key=f'{key_prefix}_run',
+        use_container_width=True,
+    )
+
+    if run_clicked:
+        result = apply_filters(df_filtered, filters)
+
+        # 把丹贊格相關欄位與基本欄位重排到前面
+        front_cols_order = ['代號', '公司名稱', '產業類別', '實收資本額（億）',
+                            col_ma, col_sk, col_dz3]
+        front_cols_order = [c for c in front_cols_order if c in result.columns]
+        rest_cols = [c for c in result.columns if c not in front_cols_order]
+        result = result[front_cols_order + rest_cols]
+
+        st.session_state[f'{key_prefix}_result'] = result
+        st.session_state[f'{key_prefix}_date'] = date_str
+
+    # ---- 若儲存的結果日期與目前最新日期不同，提示 ----
+    stored_date = st.session_state.get(f'{key_prefix}_date')
+    if stored_date and stored_date != date_str:
+        st.warning(
+            f"⚠️ 你儲存的結果日期是 {stored_date}，目前最新交易日是 {date_str}，"
+            f"請重新執行篩選"
+        )
+
+    # ---- 顯示結果 ----
+    if f'{key_prefix}_result' in st.session_state:
+        st.markdown("---")
+        extra_pinned = {
+            col_ma: st.column_config.TextColumn(col_ma, pinned=True),
+            col_sk: st.column_config.TextColumn(col_sk, pinned=True),
+        }
+        if col_dz3 in df.columns:
+            extra_pinned[col_dz3] = st.column_config.NumberColumn(
+                col_dz3, pinned=True, format='%.5f')
+        render_result(
+            st.session_state[f'{key_prefix}_result'],
+            key_prefix,
+            extra_pinned=extra_pinned,
+            sort_by=col_dz3,
+            sort_ascending=True,
+        )
+    else:
+        st.info("👆 設定完篩選條件後，點選「開始執行」")
+
+
+# =========================
+# Tab 17/18：Hull 綠帶選股（日線 / 週線）
+#   - 日期鎖定為最新交易日
+#   - 硬過濾：最後日期是uptrend == 'O'
+#   - 排序：符合數 由大到小
+#   - 缺欄位時：顯示警告 + 空表格（不終止）
+# =========================
+def render_tab_hull_uptrend(period_label, key_prefix, title):
+    st.header(title)
+
+    # ---- 日期鎖定為最新交易日 ----
+    dates = list_simply_dates()
+    if not dates:
+        st.error("❌ 找不到任何 simply_report 檔案")
+        return
+    date_str = dates[0]  # 已 reverse=True，取最新
+    st.caption(f"📅 日期鎖定為最新交易日：**{date_str}**（此頁面不受側邊欄日期影響）")
+
+    df = load_simply(date_str, period_label)
+    if df is None:
+        st.error(f"❌ 讀不到 simply_report_{date_str}_{period_label}.xlsx")
+        return
+
+    col_uptrend = '最後日期是uptrend'
+
+    # ---- 檢查欄位（缺欄位 → 顯示警告 + 空表格，不終止）----
+    if col_uptrend not in df.columns:
+        st.warning(
+            f"⚠️ 此檔案缺少欄位：{col_uptrend}，無法進行 Hull 綠帶硬過濾"
+        )
+        st.info(
+            f"📋 由於欄位缺失，無法進行篩選。"
+            f"請用新版重新產出 simply_report_{date_str}_{period_label}.xlsx"
+        )
+        empty_cols = [c for c in ['代號', '公司名稱', '產業類別', '實收資本額（億）']
+                      if c in df.columns]
+        st.dataframe(pd.DataFrame(columns=empty_cols), width='stretch')
+        return
+
+    # ---- 硬過濾 ----
+    mask = df[col_uptrend].astype(str).str.strip() == 'O'
+    df_filtered = df[mask].copy()
+
+    if df_filtered.empty:
+        st.warning("🔍 此日期無符合『Hull 綠帶（uptrend）』的個股")
+        return
+
+    st.caption(
+        f"📂 simply_report_{date_str}_{period_label}.xlsx "
+        f"（原始 {len(df)} 檔 → Hull 綠帶 **{len(df_filtered)} 檔**）"
+    )
+
+    # ---- 沿用 Tab1/Tab2 的篩選 UI ----
+    filters = build_filter_ui(df_filtered, period_label, key_prefix)
+
+    run_clicked = st.button(
+        "▶️ 開始執行",
+        type='primary',
+        key=f'{key_prefix}_run',
+        use_container_width=True,
+    )
+
+    if run_clicked:
+        result = apply_filters(df_filtered, filters)
+
+        # 把 uptrend 欄位與基本欄位重排到前面
+        front_cols_order = ['代號', '公司名稱', '產業類別', '實收資本額（億）',
+                            col_uptrend, '符合數']
+        front_cols_order = [c for c in front_cols_order if c in result.columns]
+        rest_cols = [c for c in result.columns if c not in front_cols_order]
+        result = result[front_cols_order + rest_cols]
+
+        st.session_state[f'{key_prefix}_result'] = result
+        st.session_state[f'{key_prefix}_date'] = date_str
+
+    # ---- 若儲存的結果日期與目前最新日期不同，提示 ----
+    stored_date = st.session_state.get(f'{key_prefix}_date')
+    if stored_date and stored_date != date_str:
+        st.warning(
+            f"⚠️ 你儲存的結果日期是 {stored_date}，目前最新交易日是 {date_str}，"
+            f"請重新執行篩選"
+        )
+
+    # ---- 顯示結果 ----
+    if f'{key_prefix}_result' in st.session_state:
+        st.markdown("---")
+        extra_pinned = {
+            col_uptrend: st.column_config.TextColumn(col_uptrend, pinned=True),
+        }
+        if '符合數' in df.columns:
+            extra_pinned['符合數'] = st.column_config.NumberColumn(
+                '符合數', pinned=True)
+        render_result(
+            st.session_state[f'{key_prefix}_result'],
+            key_prefix,
+            extra_pinned=extra_pinned,
+            sort_by='符合數',
+            sort_ascending=False,
+        )
+    else:
+        st.info("👆 設定完篩選條件後，點選「開始執行」")
+
+
+# =========================
+# Tab 16：丹贊格日週交集
+# =========================
+def render_tab_intersection_danzan():
+    st.header("🔀 丹贊格日週交集")
+
+    df_d = st.session_state.get('daily_danzan_result')
+    df_w = st.session_state.get('weekly_danzan_result')
+
+    if df_d is None or df_w is None:
+        st.info("👈 請先在「丹贊格選股（日）」與「丹贊格選股（週）」分別執行篩選，"
+                "交集結果會自動顯示在這裡")
+        return
+
+    daily_date  = st.session_state.get('daily_danzan_date', '?')
+    weekly_date = st.session_state.get('weekly_danzan_date', '?')
+
+    st.caption(
+        f"📂 日線結果：{daily_date}（{len(df_d)} 檔）"
+        f"　|　週線結果：{weekly_date}（{len(df_w)} 檔）"
+    )
+
+    codes_d = set(df_d['代號'].astype(str))
+    codes_w = set(df_w['代號'].astype(str))
+    common = codes_d & codes_w
+
+    if not common:
+        st.warning(
+            f"🔍 查無交集（日線 {len(codes_d)} 檔、週線 {len(codes_w)} 檔，無相同個股）"
+        )
+        return
+
+    st.success(
+        f"✅ 日線符合 {len(codes_d)} 檔、週線符合 {len(codes_w)} 檔，"
+        f"日週共振 **{len(common)} 檔**"
+    )
+
+    # 基本 4 欄 + 丹贊格3線糾結值（若有）
+    col_dz3 = '丹贊格3線糾結值'
+    base_cols = ['代號', '公司名稱', '產業類別', '實收資本額（億）']
+    if col_dz3 in df_d.columns:
+        base_cols.append(col_dz3)
+    base_cols = [c for c in base_cols if c in df_d.columns]
+
+    result = df_d[df_d['代號'].astype(str).isin(common)][base_cols].copy()
+
+    # 排序：丹贊格3線糾結值 由小到大
+    if col_dz3 in result.columns:
+        result = result.sort_values(col_dz3, ascending=True,
+                                    na_position='last').reset_index(drop=True)
+    else:
+        result = result.reset_index(drop=True)
+
+    column_config = _build_pinned_config(result)
+
+    st.dataframe(
+        _arrow_safe(result),
+        width='stretch',
+        height=_calc_table_height(len(result)),
+        column_config=column_config,
+    )
+
+    csv = result.to_csv(index=False).encode('utf-8-sig')
+    st.download_button(
+        "📥 匯出交集結果（CSV）",
+        data=csv,
+        file_name=f"intersection_danzan_{datetime.today().strftime('%Y%m%d')}.csv",
+        mime='text/csv',
+        key='intersection_danzan_download_csv',
+    )
+
+
+# =========================
+# Tab 19：Hull綠帶日週交集
+# =========================
+def render_tab_intersection_hull_uptrend():
+    st.header("🔀 Hull綠帶日週交集")
+
+    df_d = st.session_state.get('daily_hull_result')
+    df_w = st.session_state.get('weekly_hull_result')
+
+    if df_d is None or df_w is None:
+        st.info("👈 請先在「Hull綠帶選股（日）」與「Hull綠帶選股（週）」分別執行篩選，"
+                "交集結果會自動顯示在這裡")
+        return
+
+    daily_date  = st.session_state.get('daily_hull_date', '?')
+    weekly_date = st.session_state.get('weekly_hull_date', '?')
+
+    st.caption(
+        f"📂 日線結果：{daily_date}（{len(df_d)} 檔）"
+        f"　|　週線結果：{weekly_date}（{len(df_w)} 檔）"
+    )
+
+    codes_d = set(df_d['代號'].astype(str))
+    codes_w = set(df_w['代號'].astype(str))
+    common = codes_d & codes_w
+
+    if not common:
+        st.warning(
+            f"🔍 查無交集（日線 {len(codes_d)} 檔、週線 {len(codes_w)} 檔，無相同個股）"
+        )
+        return
+
+    st.success(
+        f"✅ 日線符合 {len(codes_d)} 檔、週線符合 {len(codes_w)} 檔，"
+        f"日週共振 **{len(common)} 檔**"
+    )
+
+    # 基本 4 欄 + 符合數
+    base_cols = ['代號', '公司名稱', '產業類別', '實收資本額（億）']
+    if '符合數' in df_d.columns:
+        base_cols.append('符合數')
+    base_cols = [c for c in base_cols if c in df_d.columns]
+
+    result = df_d[df_d['代號'].astype(str).isin(common)][base_cols].copy()
+
+    # 排序：符合數 由大到小
+    if '符合數' in result.columns:
+        result = result.sort_values('符合數', ascending=False,
+                                    na_position='last').reset_index(drop=True)
+    else:
+        result = result.reset_index(drop=True)
+
+    column_config = _build_pinned_config(result)
+
+    st.dataframe(
+        _arrow_safe(result),
+        width='stretch',
+        height=_calc_table_height(len(result)),
+        column_config=column_config,
+    )
+
+    csv = result.to_csv(index=False).encode('utf-8-sig')
+    st.download_button(
+        "📥 匯出交集結果（CSV）",
+        data=csv,
+        file_name=f"intersection_hull_{datetime.today().strftime('%Y%m%d')}.csv",
+        mime='text/csv',
+        key='intersection_hull_download_csv',
+    )
+
+# =========================
 # 側邊欄（只放全域設定）
 # =========================
 def build_sidebar():
@@ -1235,12 +1591,15 @@ def main():
     build_sidebar()
 
     (tab1, tab2, tab3, tab4, tab5, tab6,
-     tab7, tab8, tab9, tab10, tab11, tab12, tab13) = st.tabs([
+     tab7, tab8, tab9, tab10, tab11, tab12, tab13,
+     tab14, tab15, tab16, tab17, tab18, tab19) = st.tabs([
         "🔵 日線", "🟢 週線", "🔀 日週交集",
         "🎯 日線3線糾結", "🎯 週線3線糾結", "🎯 日週3線交集",
         "🎯 日線均線TP", "🎯 週線均線TP", "🎯 日週均線TP交集",
         "🎯 日線CCI穿越100", "🎯 週線CCI穿越100", "🎯 日週CCI交集",
         "🎯 日週Mansfield交集",
+        "🎯 丹贊格選股（日）", "🎯 丹贊格選股（週）", "🎯 丹贊格日週交集",
+        "🎯 Hull綠帶選股（日）", "🎯 Hull綠帶選股（週）", "🎯 Hull綠帶日週交集",
     ])
     with tab1:
         render_tab_daily()
@@ -1268,6 +1627,18 @@ def main():
         render_tab_intersection_cci()
     with tab13:
         render_tab_intersection_mansfield()
+    with tab14:
+        render_tab_danzan('daily', 'daily_danzan', "🎯 丹贊格選股（日）")
+    with tab15:
+        render_tab_danzan('weekly', 'weekly_danzan', "🎯 丹贊格選股（週）")
+    with tab16:
+        render_tab_intersection_danzan()
+    with tab17:
+        render_tab_hull_uptrend('daily', 'daily_hull', "🎯 Hull綠帶選股（日）")
+    with tab18:
+        render_tab_hull_uptrend('weekly', 'weekly_hull', "🎯 Hull綠帶選股（週）")
+    with tab19:
+        render_tab_intersection_hull_uptrend()
 
 
 if __name__ == "__main__":
