@@ -12,6 +12,11 @@
 #   - 側邊欄：全域日期選擇
 #   - 篩選條件：勾選欄位 → 展開該欄位可選值 → 多選/範圍
 #   - 日期欄位 6 個互斥，只能選一個；預設日期起迄為「當天與當天」
+# ★ V68.1 費氏對齊（僅改欄位名稱參照）：
+#   - KAMA10>20>30 → KAMA5>13>21
+#   - 收盤價>KAMA10 → 收盤價>KAMA5
+#   - RSI（14）等級 → RSI（21）等級
+#   - 收>5/10/20扣 → 收>5/13/21扣
 # ============================================================
 import os
 import re
@@ -40,9 +45,11 @@ DATE_FIELDS = [
 ]
 
 # 類別型欄位：(欄位名, 可選值清單, 預設勾選, 預設選中值)
+# ★ V68.1：KAMA10>20>30 → KAMA5>13>21、收盤價>KAMA10 → 收盤價>KAMA5、
+#           RSI（14）等級 → RSI（21）等級
 CATEGORICAL_FIELDS = [
-    ('KAMA10>20>30', ['O', 'X'], True, ['O']),
-    ('收盤價>KAMA10', ['O', 'X'], True, ['O']),
+    ('KAMA5>13>21', ['O', 'X'], True, ['O']),
+    ('收盤價>KAMA5', ['O', 'X'], True, ['O']),
     ('趨勢線突破', ['O', '△', 'X'], True, ['O']),
     ('EHMA趨勢', ['綠帶(多)', '紅帶(空)'], True, ['綠帶(多)']),
     ('TP日EMA趨勢', ['上升', '持平', '下降'], True, ['上升']),
@@ -52,8 +59,8 @@ CATEGORICAL_FIELDS = [
       '偏強', '強勢', '超買／強勢', '極度超買', '資料不足'],
      True,
      ['極度超賣', '超賣', '弱勢反彈／超賣修復', '偏弱', '中性', '偏強']),
-    # ★ NEW：RSI（14）等級（預設與 StochRSI 相同）
-    ('RSI（14）等級',
+    # ★ NEW：RSI（21）等級（預設與 StochRSI 相同）
+    ('RSI（21）等級',
      ['極度超賣', '超賣', '弱勢反彈／超賣修復', '偏弱', '中性',
       '偏強', '強勢', '超買／強勢', '極度超買', '資料不足'],
      True,
@@ -140,8 +147,6 @@ def get_numeric_fields(period_label):
     if period_label == 'daily':
         return NUMERIC_FIELDS_COMMON + NUMERIC_FIELDS_TURNOVER_DAILY
     return NUMERIC_FIELDS_COMMON + NUMERIC_FIELDS_TURNOVER_WEEKLY
-
-
 # =========================
 # 資料讀取
 # =========================
@@ -217,7 +222,8 @@ def build_filter_ui(df, period_label, key_prefix):
     for field, _opts, _dc, _dv in CATEGORICAL_FIELDS:
         if field in df.columns:
             all_cb_keys.append(f'{key_prefix}_cb_cat_{field}')
-    if '收>5/10/20扣' in df.columns:
+    # ★ V68.1：收>5/10/20扣 → 收>5/13/21扣
+    if '收>5/13/21扣' in df.columns:
         all_cb_keys.append(f'{key_prefix}_cb_deduct_check')
     for field, _lo, _hi, _dv, _st, _dc in get_numeric_fields(period_label):
         if field in df.columns:
@@ -311,26 +317,26 @@ def build_filter_ui(df, period_label, key_prefix):
                 if val:
                     filters[field] = val
 
-    # ---- ★ NEW：收>5/10/20扣（專屬 expander）----
-    if '收>5/10/20扣' in df.columns:
-        with st.expander("🎯 收>5/10/20扣", expanded=False):
+    # ---- ★ NEW：收>5/13/21扣（專屬 expander，V68.1：原 收>5/10/20扣）----
+    if '收>5/13/21扣' in df.columns:
+        with st.expander("🎯 收>5/13/21扣", expanded=False):
             cb_key = f'{key_prefix}_cb_deduct_check'
             if cb_key not in st.session_state:
                 st.session_state[cb_key] = False
             is_checked = st.checkbox(
-                '收>5/10/20扣（收盤同時大於 5/10/20MA 扣抵值）',
+                '收>5/13/21扣（收盤同時大於 5/13/21MA 扣抵值）',
                 key=cb_key,
             )
             if is_checked:
                 val = st.multiselect(
-                    "收>5/10/20扣 選項",
+                    "收>5/13/21扣 選項",
                     options=['O', 'X'],
                     default=['O'],
                     key=f'{key_prefix}_deduct_check_val',
                     label_visibility='collapsed',
                 )
                 if val:
-                    filters['收>5/10/20扣'] = val
+                    filters['收>5/13/21扣'] = val
     # ---- ★ NEW：布林四區域（selectbox 單選）----
     boll_zone_all = ['布林上軌之上', '布林上軌與中軌間',
                      '布林中軌與下軌間', '布林下軌之下']
@@ -368,8 +374,6 @@ def build_filter_ui(df, period_label, key_prefix):
                 filters[field] = val
 
     return filters
-
-
 # =========================
 # 篩選邏輯
 # =========================
@@ -493,9 +497,7 @@ def render_result(df, key_prefix, extra_pinned=None, sort_by=None, sort_ascendin
         mime='text/csv',
         key=f'{key_prefix}_download_csv',
     )
-
-
-# =========================
+    # =========================
 # Tab 1：日線
 # =========================
 def render_tab_daily():
@@ -772,7 +774,6 @@ def render_tab_ma_ribbon(period_label, key_prefix, title):
         )
     else:
         st.info("👆 設定完篩選條件後，點選「開始執行」")
-
 # =========================
 # Tab 10/11：CCI 穿越 100（日線 / 週線）
 #   - 日期鎖定為最新交易日
@@ -861,6 +862,7 @@ def render_tab_cci(period_label, key_prefix, title):
         )
     else:
         st.info("👆 設定完篩選條件後，點選「開始執行」")
+
 
 # =========================
 # Tab 3：日週交集
@@ -1190,7 +1192,6 @@ def render_tab_intersection_mansfield():
         mime='text/csv',
         key='intersection_mansfield_download_csv',
     )
-
 # =========================
 # Tab 14/15：丹贊格選股（日線 / 週線）
 #   - 日期鎖定為最新交易日
