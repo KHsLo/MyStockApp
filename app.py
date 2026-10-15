@@ -1407,6 +1407,110 @@ def render_tab_hull_uptrend(period_label, key_prefix, title):
 
 
 # =========================
+# Tab 20/21：三役好轉選股（日線 / 週線）
+#   - 日期鎖定為最新交易日
+#   - 硬過濾：三役好轉 == 'O'
+#   - 排序：符合數 由大到小
+#   - 缺欄位時：顯示警告 + 空表格（不終止）
+# =========================
+def render_tab_ichimoku_gyakuten(period_label, key_prefix, title):
+    st.header(title)
+
+    # ---- 日期鎖定為最新交易日 ----
+    dates = list_simply_dates()
+    if not dates:
+        st.error("❌ 找不到任何 simply_report 檔案")
+        return
+    date_str = dates[0]  # 已 reverse=True，取最新
+    st.caption(f"📅 日期鎖定為最新交易日：**{date_str}**（此頁面不受側邊欄日期影響）")
+
+    df = load_simply(date_str, period_label)
+    if df is None:
+        st.error(f"❌ 讀不到 simply_report_{date_str}_{period_label}.xlsx")
+        return
+
+    col_gyakuten = '三役好轉'
+
+    # ---- 檢查欄位（缺欄位 → 顯示警告 + 空表格，不終止）----
+    if col_gyakuten not in df.columns:
+        st.warning(
+            f"⚠️ 此檔案缺少欄位：{col_gyakuten}，無法進行三役好轉硬過濾"
+        )
+        st.info(
+            f"📋 由於欄位缺失，無法進行篩選。"
+            f"請用新版（含一目均衡表三役好轉）重新產出 "
+            f"simply_report_{date_str}_{period_label}.xlsx"
+        )
+        empty_cols = [c for c in ['代號', '公司名稱', '產業類別', '實收資本額（億）']
+                      if c in df.columns]
+        st.dataframe(pd.DataFrame(columns=empty_cols), width='stretch')
+        return
+
+    # ---- 硬過濾 ----
+    mask = df[col_gyakuten].astype(str).str.strip() == 'O'
+    df_filtered = df[mask].copy()
+
+    if df_filtered.empty:
+        st.warning("🔍 此日期無符合『三役好轉（今日剛發生）』的個股")
+        return
+
+    st.caption(
+        f"📂 simply_report_{date_str}_{period_label}.xlsx "
+        f"（原始 {len(df)} 檔 → 三役好轉 **{len(df_filtered)} 檔**）"
+    )
+
+    # ---- 沿用 Tab1/Tab2 的篩選 UI ----
+    filters = build_filter_ui(df_filtered, period_label, key_prefix)
+
+    run_clicked = st.button(
+        "▶️ 開始執行",
+        type='primary',
+        key=f'{key_prefix}_run',
+        use_container_width=True,
+    )
+
+    if run_clicked:
+        result = apply_filters(df_filtered, filters)
+
+        # 把三役好轉欄位與基本欄位重排到前面
+        front_cols_order = ['代號', '公司名稱', '產業類別', '實收資本額（億）',
+                            col_gyakuten, '符合數']
+        front_cols_order = [c for c in front_cols_order if c in result.columns]
+        rest_cols = [c for c in result.columns if c not in front_cols_order]
+        result = result[front_cols_order + rest_cols]
+
+        st.session_state[f'{key_prefix}_result'] = result
+        st.session_state[f'{key_prefix}_date'] = date_str
+
+    # ---- 若儲存的結果日期與目前最新日期不同，提示 ----
+    stored_date = st.session_state.get(f'{key_prefix}_date')
+    if stored_date and stored_date != date_str:
+        st.warning(
+            f"⚠️ 你儲存的結果日期是 {stored_date}，目前最新交易日是 {date_str}，"
+            f"請重新執行篩選"
+        )
+
+    # ---- 顯示結果 ----
+    if f'{key_prefix}_result' in st.session_state:
+        st.markdown("---")
+        extra_pinned = {
+            col_gyakuten: st.column_config.TextColumn(col_gyakuten, pinned=True),
+        }
+        if '符合數' in df.columns:
+            extra_pinned['符合數'] = st.column_config.NumberColumn(
+                '符合數', pinned=True)
+        render_result(
+            st.session_state[f'{key_prefix}_result'],
+            key_prefix,
+            extra_pinned=extra_pinned,
+            sort_by='符合數',
+            sort_ascending=False,
+        )
+    else:
+        st.info("👆 設定完篩選條件後，點選「開始執行」")
+
+
+# =========================
 # Tab 16：丹贊格日週交集
 # =========================
 def render_tab_intersection_danzan():
@@ -1548,6 +1652,78 @@ def render_tab_intersection_hull_uptrend():
         key='intersection_hull_download_csv',
     )
 
+
+# =========================
+# Tab 22：三役好轉日週交集
+# =========================
+def render_tab_intersection_ichimoku_gyakuten():
+    st.header("🔀 三役好轉日週交集")
+
+    df_d = st.session_state.get('daily_gyakuten_result')
+    df_w = st.session_state.get('weekly_gyakuten_result')
+
+    if df_d is None or df_w is None:
+        st.info("👈 請先在「日三役好轉」與「週三役好轉」分別執行篩選，"
+                "交集結果會自動顯示在這裡")
+        return
+
+    daily_date  = st.session_state.get('daily_gyakuten_date', '?')
+    weekly_date = st.session_state.get('weekly_gyakuten_date', '?')
+
+    st.caption(
+        f"📂 日線結果：{daily_date}（{len(df_d)} 檔）"
+        f"　|　週線結果：{weekly_date}（{len(df_w)} 檔）"
+    )
+
+    codes_d = set(df_d['代號'].astype(str))
+    codes_w = set(df_w['代號'].astype(str))
+    common = codes_d & codes_w
+
+    if not common:
+        st.warning(
+            f"🔍 查無交集（日線 {len(codes_d)} 檔、週線 {len(codes_w)} 檔，無相同個股）"
+        )
+        return
+
+    st.success(
+        f"✅ 日線符合 {len(codes_d)} 檔、週線符合 {len(codes_w)} 檔，"
+        f"日週共振 **{len(common)} 檔**"
+    )
+
+    # 基本 4 欄 + 符合數
+    base_cols = ['代號', '公司名稱', '產業類別', '實收資本額（億）']
+    if '符合數' in df_d.columns:
+        base_cols.append('符合數')
+    base_cols = [c for c in base_cols if c in df_d.columns]
+
+    result = df_d[df_d['代號'].astype(str).isin(common)][base_cols].copy()
+
+    # 排序：符合數 由大到小
+    if '符合數' in result.columns:
+        result = result.sort_values('符合數', ascending=False,
+                                    na_position='last').reset_index(drop=True)
+    else:
+        result = result.reset_index(drop=True)
+
+    column_config = _build_pinned_config(result)
+
+    st.dataframe(
+        _arrow_safe(result),
+        width='stretch',
+        height=_calc_table_height(len(result)),
+        column_config=column_config,
+    )
+
+    csv = result.to_csv(index=False).encode('utf-8-sig')
+    st.download_button(
+        "📥 匯出交集結果（CSV）",
+        data=csv,
+        file_name=f"intersection_gyakuten_{datetime.today().strftime('%Y%m%d')}.csv",
+        mime='text/csv',
+        key='intersection_gyakuten_download_csv',
+    )
+
+
 # =========================
 # 側邊欄（只放全域設定）
 # =========================
@@ -1593,7 +1769,8 @@ def main():
 
     (tab1, tab2, tab3, tab4, tab5, tab6,
      tab7, tab8, tab9, tab10, tab11, tab12, tab13,
-     tab14, tab15, tab16, tab17, tab18, tab19) = st.tabs([
+     tab14, tab15, tab16, tab17, tab18, tab19,
+     tab20, tab21, tab22) = st.tabs([
         "🔵 日線", "🟢 週線", "🔀 日週交集",
         "🎯 日線3線糾結", "🎯 週線3線糾結", "🎯 日週3線交集",
         "🎯 日線均線TP", "🎯 週線均線TP", "🎯 日週均線TP交集",
@@ -1601,6 +1778,7 @@ def main():
         "🎯 日週Mansfield交集",
         "🎯 丹贊格選股（日）", "🎯 丹贊格選股（週）", "🎯 丹贊格日週交集",
         "🎯 Hull綠帶選股（日）", "🎯 Hull綠帶選股（週）", "🎯 Hull綠帶日週交集",
+        "🎯 日三役好轉", "🎯 週三役好轉", "🎯 日週三役好轉交集",
     ])
     with tab1:
         render_tab_daily()
@@ -1640,6 +1818,12 @@ def main():
         render_tab_hull_uptrend('weekly', 'weekly_hull', "🎯 Hull綠帶選股（週）")
     with tab19:
         render_tab_intersection_hull_uptrend()
+    with tab20:
+        render_tab_ichimoku_gyakuten('daily', 'daily_gyakuten', "🎯 日三役好轉")
+    with tab21:
+        render_tab_ichimoku_gyakuten('weekly', 'weekly_gyakuten', "🎯 週三役好轉")
+    with tab22:
+        render_tab_intersection_ichimoku_gyakuten()
 
 
 if __name__ == "__main__":
