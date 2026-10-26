@@ -98,6 +98,8 @@ CATEGORICAL_FIELDS = [
     ('最後交易日sk是否大於sd', ['O', 'X'], False, ['O']),
     ('PVO上穿0軸', ['O', 'X'], False, ['O']),
     ('布林突破', ['O', 'X'], False, ['O']),
+    # ★ V68.3：布林下軌大於EMA144（EMA144 < 布林下軌即符合）
+    ('布林下軌大於EMA144', ['O', 'X'], False, ['O']),
     # ★ NEW：Mansfield20RS>0軸
     ('Mansfield20RS>0軸', ['O', 'X'], False, ['O']),
 ]
