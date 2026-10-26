@@ -1413,7 +1413,16 @@ def render_tab_hull_uptrend(period_label, key_prefix, title):
 #   - 排序：符合數 由大到小
 #   - 缺欄位時：顯示警告 + 空表格（不終止）
 # =========================
-def render_tab_ichimoku_gyakuten(period_label, key_prefix, title):
+def render_tab_ichimoku_gyakuten(period_label, key_prefix, title,
+                                  filter_col='三役好轉',
+                                  filter_label='三役好轉',
+                                  filter_desc='三役好轉（今日剛發生）'):
+    """
+    ★ V68.2：一目均衡表選股（參數化）
+    - filter_col   ：要硬過濾的欄位名（'三役好轉' 或 '5日內三役好轉'）
+    - filter_label ：顯示用名稱（同欄位名）
+    - filter_desc  ：空結果時的描述文字
+    """
     st.header(title)
 
     # ---- 日期鎖定為最新交易日 ----
@@ -1429,16 +1438,16 @@ def render_tab_ichimoku_gyakuten(period_label, key_prefix, title):
         st.error(f"❌ 讀不到 simply_report_{date_str}_{period_label}.xlsx")
         return
 
-    col_gyakuten = '三役好轉'
+    col_gyakuten = filter_col
 
     # ---- 檢查欄位（缺欄位 → 顯示警告 + 空表格，不終止）----
     if col_gyakuten not in df.columns:
         st.warning(
-            f"⚠️ 此檔案缺少欄位：{col_gyakuten}，無法進行三役好轉硬過濾"
+            f"⚠️ 此檔案缺少欄位：{col_gyakuten}，無法進行{filter_label}硬過濾"
         )
         st.info(
             f"📋 由於欄位缺失，無法進行篩選。"
-            f"請用新版（含一目均衡表三役好轉）重新產出 "
+            f"請用新版（含一目均衡表 {filter_label}）重新產出 "
             f"simply_report_{date_str}_{period_label}.xlsx"
         )
         empty_cols = [c for c in ['代號', '公司名稱', '產業類別', '實收資本額（億）']
@@ -1451,12 +1460,12 @@ def render_tab_ichimoku_gyakuten(period_label, key_prefix, title):
     df_filtered = df[mask].copy()
 
     if df_filtered.empty:
-        st.warning("🔍 此日期無符合『三役好轉（今日剛發生）』的個股")
+        st.warning(f"🔍 此日期無符合『{filter_desc}』的個股")
         return
 
     st.caption(
         f"📂 simply_report_{date_str}_{period_label}.xlsx "
-        f"（原始 {len(df)} 檔 → 三役好轉 **{len(df_filtered)} 檔**）"
+        f"（原始 {len(df)} 檔 → {filter_label} **{len(df_filtered)} 檔**）"
     )
 
     # ---- 沿用 Tab1/Tab2 的篩選 UI ----
@@ -1472,7 +1481,7 @@ def render_tab_ichimoku_gyakuten(period_label, key_prefix, title):
     if run_clicked:
         result = apply_filters(df_filtered, filters)
 
-        # 把三役好轉欄位與基本欄位重排到前面
+        # 把目標欄位與基本欄位重排到前面
         front_cols_order = ['代號', '公司名稱', '產業類別', '實收資本額（億）',
                             col_gyakuten, '符合數']
         front_cols_order = [c for c in front_cols_order if c in result.columns]
@@ -1656,19 +1665,33 @@ def render_tab_intersection_hull_uptrend():
 # =========================
 # Tab 22：三役好轉日週交集
 # =========================
-def render_tab_intersection_ichimoku_gyakuten():
-    st.header("🔀 三役好轉日週交集")
+def render_tab_intersection_ichimoku_gyakuten(
+        title="🔀 三役好轉日週交集",
+        daily_key='daily_gyakuten_result',
+        weekly_key='weekly_gyakuten_result',
+        daily_date_key='daily_gyakuten_date',
+        weekly_date_key='weekly_gyakuten_date',
+        csv_prefix='intersection_gyakuten',
+        filter_label='三役好轉'):
+    """
+    ★ V68.2：一目均衡表日週交集（參數化）
+    - daily_key / weekly_key       ：session_state 中存放日/週結果的 key
+    - daily_date_key / weekly_date_key ：session_state 中存放日/週日期的 key
+    - csv_prefix                   ：CSV 檔名前綴
+    - filter_label                 ：顯示用名稱
+    """
+    st.header(title)
 
-    df_d = st.session_state.get('daily_gyakuten_result')
-    df_w = st.session_state.get('weekly_gyakuten_result')
+    df_d = st.session_state.get(daily_key)
+    df_w = st.session_state.get(weekly_key)
 
     if df_d is None or df_w is None:
-        st.info("👈 請先在「日三役好轉」與「週三役好轉」分別執行篩選，"
+        st.info(f"👈 請先在「日{filter_label}」與「週{filter_label}」分別執行篩選，"
                 "交集結果會自動顯示在這裡")
         return
 
-    daily_date  = st.session_state.get('daily_gyakuten_date', '?')
-    weekly_date = st.session_state.get('weekly_gyakuten_date', '?')
+    daily_date  = st.session_state.get(daily_date_key, '?')
+    weekly_date = st.session_state.get(weekly_date_key, '?')
 
     st.caption(
         f"📂 日線結果：{daily_date}（{len(df_d)} 檔）"
@@ -1718,9 +1741,9 @@ def render_tab_intersection_ichimoku_gyakuten():
     st.download_button(
         "📥 匯出交集結果（CSV）",
         data=csv,
-        file_name=f"intersection_gyakuten_{datetime.today().strftime('%Y%m%d')}.csv",
+        file_name=f"{csv_prefix}_{datetime.today().strftime('%Y%m%d')}.csv",
         mime='text/csv',
-        key='intersection_gyakuten_download_csv',
+        key=f'{csv_prefix}_download_csv',
     )
 
 
@@ -1770,7 +1793,8 @@ def main():
     (tab1, tab2, tab3, tab4, tab5, tab6,
      tab7, tab8, tab9, tab10, tab11, tab12, tab13,
      tab14, tab15, tab16, tab17, tab18, tab19,
-     tab20, tab21, tab22) = st.tabs([
+     tab20, tab21, tab22,
+     tab23, tab24, tab25) = st.tabs([
         "🔵 日線", "🟢 週線", "🔀 日週交集",
         "🎯 日線3線糾結", "🎯 週線3線糾結", "🎯 日週3線交集",
         "🎯 日線均線TP", "🎯 週線均線TP", "🎯 日週均線TP交集",
@@ -1779,6 +1803,8 @@ def main():
         "🎯 丹贊格選股（日）", "🎯 丹贊格選股（週）", "🎯 丹贊格日週交集",
         "🎯 Hull綠帶選股（日）", "🎯 Hull綠帶選股（週）", "🎯 Hull綠帶日週交集",
         "🎯 日三役好轉", "🎯 週三役好轉", "🎯 日週三役好轉交集",
+        # ★ V68.2：新增「5日內三役好轉」3 個 Tab
+        "🎯 日5日內三役好轉", "🎯 週5日內三役好轉", "🎯 日週5日內三役好轉交集",
     ])
     with tab1:
         render_tab_daily()
@@ -1824,6 +1850,28 @@ def main():
         render_tab_ichimoku_gyakuten('weekly', 'weekly_gyakuten', "🎯 週三役好轉")
     with tab22:
         render_tab_intersection_ichimoku_gyakuten()
+    # ★ V68.2：5日內三役好轉 3 個 Tab
+    with tab23:
+        render_tab_ichimoku_gyakuten(
+            'daily', 'daily_gyakuten5d', "🎯 日5日內三役好轉",
+            filter_col='5日內三役好轉',
+            filter_label='5日內三役好轉',
+            filter_desc='5日內三役好轉（最後 5 根任一天發生）')
+    with tab24:
+        render_tab_ichimoku_gyakuten(
+            'weekly', 'weekly_gyakuten5d', "🎯 週5日內三役好轉",
+            filter_col='5日內三役好轉',
+            filter_label='5日內三役好轉',
+            filter_desc='5日內三役好轉（最後 5 根任一天發生）')
+    with tab25:
+        render_tab_intersection_ichimoku_gyakuten(
+            title="🔀 5日內三役好轉日週交集",
+            daily_key='daily_gyakuten5d_result',
+            weekly_key='weekly_gyakuten5d_result',
+            daily_date_key='daily_gyakuten5d_date',
+            weekly_date_key='weekly_gyakuten5d_date',
+            csv_prefix='intersection_gyakuten5d',
+            filter_label='5日內三役好轉')
 
 
 if __name__ == "__main__":
