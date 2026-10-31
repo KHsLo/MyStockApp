@@ -100,6 +100,8 @@ CATEGORICAL_FIELDS = [
     ('布林突破', ['O', 'X'], False, ['O']),
     # ★ V68.3：布林下軌大於EMA144（EMA144 < 布林下軌即符合）
     ('布林下軌大於EMA144', ['O', 'X'], False, ['O']),
+    # ★ V68.4：紅K實體佔布林7成（收紅且實體 >= 布林空間 70%）
+    ('紅K實體佔布林7成', ['O', 'X'], False, ['O']),
     # ★ NEW：Mansfield20RS>0軸
     ('Mansfield20RS>0軸', ['O', 'X'], False, ['O']),
 ]
@@ -1750,6 +1752,244 @@ def render_tab_intersection_ichimoku_gyakuten(
 
 
 # =========================
+# ★ NEW：通用「單一 O/X 欄位硬過濾」輔助函式（供 Tab 26/27 使用）
+# =========================
+def _render_flag_filter_single(date_str, period_label, col_flag,
+                                key_prefix, display_label):
+    """
+    單一週期硬過濾：col_flag == 'O'
+    - 沿用 build_filter_ui / apply_filters / render_result
+    - 顯示時將 col_flag 與「符合數」釘選
+    """
+    df = load_simply(date_str, period_label)
+    if df is None:
+        st.error(f"❌ 讀不到 simply_report_{date_str}_{period_label}.xlsx")
+        return
+
+    # ---- 缺欄位 → 警告 + 空表格（不終止）----
+    if col_flag not in df.columns:
+        st.warning(f"⚠️ 此檔案缺少欄位：{col_flag}")
+        st.info(
+            f"📋 請用新版重新產出 "
+            f"simply_report_{date_str}_{period_label}.xlsx"
+        )
+        empty_cols = [c for c in ['代號', '公司名稱', '產業類別', '實收資本額（億）']
+                      if c in df.columns]
+        st.dataframe(pd.DataFrame(columns=empty_cols), width='stretch')
+        return
+
+    # ---- 硬過濾 ----
+    mask = df[col_flag].astype(str).str.strip() == 'O'
+    df_filtered = df[mask].copy()
+
+    if df_filtered.empty:
+        st.warning(f"🔍 此日期無符合『{display_label}』的個股")
+        return
+
+    st.caption(
+        f"📂 simply_report_{date_str}_{period_label}.xlsx "
+        f"（原始 {len(df)} 檔 → {display_label} **{len(df_filtered)} 檔**）"
+    )
+
+    # ---- 篩選 UI ----
+    filters = build_filter_ui(df_filtered, period_label, key_prefix)
+
+    run_clicked = st.button(
+        "▶️ 開始執行",
+        type='primary',
+        key=f'{key_prefix}_run',
+        use_container_width=True,
+    )
+
+    if run_clicked:
+        result = apply_filters(df_filtered, filters)
+
+        front_cols_order = ['代號', '公司名稱', '產業類別', '實收資本額（億）',
+                            col_flag, '符合數']
+        front_cols_order = [c for c in front_cols_order if c in result.columns]
+        rest_cols = [c for c in result.columns if c not in front_cols_order]
+        result = result[front_cols_order + rest_cols]
+
+        st.session_state[f'{key_prefix}_result'] = result
+        st.session_state[f'{key_prefix}_date'] = date_str
+
+    stored_date = st.session_state.get(f'{key_prefix}_date')
+    if stored_date and stored_date != date_str:
+        st.warning(
+            f"⚠️ 你儲存的結果日期是 {stored_date}，目前最新交易日是 {date_str}，"
+            f"請重新執行篩選"
+        )
+
+    if f'{key_prefix}_result' in st.session_state:
+        st.markdown("---")
+        extra_pinned = {
+            col_flag: st.column_config.TextColumn(col_flag, pinned=True),
+        }
+        if '符合數' in df.columns:
+            extra_pinned['符合數'] = st.column_config.NumberColumn(
+                '符合數', pinned=True)
+        render_result(
+            st.session_state[f'{key_prefix}_result'],
+            key_prefix,
+            extra_pinned=extra_pinned,
+            sort_by='符合數',
+            sort_ascending=False,
+        )
+    else:
+        st.info("👆 設定完篩選條件後，點選「開始執行」")
+
+
+def _render_flag_filter_intersection(date_str, col_flag, key_prefix, display_label):
+    """
+    日週交集硬過濾：日 == 'O' AND 週 == 'O'
+    - 顯示基本 4 欄 + 符合數
+    """
+    df_d = load_simply(date_str, 'daily')
+    df_w = load_simply(date_str, 'weekly')
+    if df_d is None or df_w is None:
+        st.error(f"❌ 讀不到 simply_report_{date_str}_daily.xlsx 或 _weekly.xlsx")
+        return
+
+    for df_, label, period in [(df_d, '日線', 'daily'),
+                                (df_w, '週線', 'weekly')]:
+        if col_flag not in df_.columns:
+            st.error(
+                f"❌ {label}檔案缺少欄位：{col_flag}\n\n"
+                f"請用新版重新產出 simply_report_{date_str}_{period}.xlsx"
+            )
+            return
+
+    df_d_f = df_d[df_d[col_flag].astype(str).str.strip() == 'O'].copy()
+    df_w_f = df_w[df_w[col_flag].astype(str).str.strip() == 'O'].copy()
+
+    codes_d = set(df_d_f['代號'].astype(str))
+    codes_w = set(df_w_f['代號'].astype(str))
+    common = codes_d & codes_w
+
+    st.caption(
+        f"📂 日線 {display_label}：**{len(codes_d)}** 檔"
+        f"　|　週線 {display_label}：**{len(codes_w)}** 檔"
+        f"　|　交集：**{len(common)}** 檔"
+    )
+
+    if not common:
+        st.warning(f"🔍 查無日週 {display_label} 交集")
+        return
+
+    st.success(f"✅ 日週 {display_label} 共振 **{len(common)} 檔**")
+
+    base_cols = ['代號', '公司名稱', '產業類別', '實收資本額（億）']
+    if '符合數' in df_d_f.columns:
+        base_cols.append('符合數')
+    base_cols = [c for c in base_cols if c in df_d_f.columns]
+
+    result = df_d_f[df_d_f['代號'].astype(str).isin(common)][base_cols].copy()
+    if '符合數' in result.columns:
+        result = result.sort_values('符合數', ascending=False,
+                                    na_position='last').reset_index(drop=True)
+    else:
+        result = result.reset_index(drop=True)
+
+    column_config = _build_pinned_config(result)
+
+    st.dataframe(
+        _arrow_safe(result),
+        width='stretch',
+        height=_calc_table_height(len(result)),
+        column_config=column_config,
+    )
+
+    csv = result.to_csv(index=False).encode('utf-8-sig')
+    st.download_button(
+        "📥 匯出交集結果（CSV）",
+        data=csv,
+        file_name=f"{key_prefix}_{datetime.today().strftime('%Y%m%d')}.csv",
+        mime='text/csv',
+        key=f'{key_prefix}_download_csv',
+    )
+
+
+# =========================
+# ★ NEW：Tab 26 — 最後日期鱷魚線金叉（日 / 週 / 日週交集）
+# =========================
+def render_tab_alligator_golden():
+    st.header("🎯 最後日期鱷魚線金叉")
+
+    dates = list_simply_dates()
+    if not dates:
+        st.error("❌ 找不到任何 simply_report 檔案")
+        return
+    date_str = dates[0]
+    st.caption(
+        f"📅 日期鎖定為最新交易日：**{date_str}**（此頁面不受側邊欄日期影響）"
+    )
+
+    mode = st.radio(
+        "📊 顯示模式",
+        options=['日線', '週線', '日週交集'],
+        index=0,
+        horizontal=True,
+        key='alligator_golden_mode',
+    )
+
+    col_flag = '最後日期鱷魚線金叉'
+    label = '鱷魚線金叉'
+
+    if mode == '日線':
+        _render_flag_filter_single(date_str, 'daily', col_flag,
+                                    'daily_alligator_golden',
+                                    f'{label}（日）')
+    elif mode == '週線':
+        _render_flag_filter_single(date_str, 'weekly', col_flag,
+                                    'weekly_alligator_golden',
+                                    f'{label}（週）')
+    else:
+        _render_flag_filter_intersection(date_str, col_flag,
+                                          'alligator_golden_intersection',
+                                          label)
+
+
+# =========================
+# ★ NEW：Tab 27 — 最後日期拋物線金叉（日 / 週 / 日週交集）
+# =========================
+def render_tab_sar_golden():
+    st.header("🎯 最後日期拋物線金叉")
+
+    dates = list_simply_dates()
+    if not dates:
+        st.error("❌ 找不到任何 simply_report 檔案")
+        return
+    date_str = dates[0]
+    st.caption(
+        f"📅 日期鎖定為最新交易日：**{date_str}**（此頁面不受側邊欄日期影響）"
+    )
+
+    mode = st.radio(
+        "📊 顯示模式",
+        options=['日線', '週線', '日週交集'],
+        index=0,
+        horizontal=True,
+        key='sar_golden_mode',
+    )
+
+    col_flag = '最後日期拋物線金叉'
+    label = '拋物線金叉'
+
+    if mode == '日線':
+        _render_flag_filter_single(date_str, 'daily', col_flag,
+                                    'daily_sar_golden',
+                                    f'{label}（日）')
+    elif mode == '週線':
+        _render_flag_filter_single(date_str, 'weekly', col_flag,
+                                    'weekly_sar_golden',
+                                    f'{label}（週）')
+    else:
+        _render_flag_filter_intersection(date_str, col_flag,
+                                          'sar_golden_intersection',
+                                          label)
+
+
+# =========================
 # 側邊欄（只放全域設定）
 # =========================
 def build_sidebar():
@@ -1796,7 +2036,8 @@ def main():
      tab7, tab8, tab9, tab10, tab11, tab12, tab13,
      tab14, tab15, tab16, tab17, tab18, tab19,
      tab20, tab21, tab22,
-     tab23, tab24, tab25) = st.tabs([
+     tab23, tab24, tab25,
+     tab26, tab27) = st.tabs([
         "🔵 日線", "🟢 週線", "🔀 日週交集",
         "🎯 日線3線糾結", "🎯 週線3線糾結", "🎯 日週3線交集",
         "🎯 日線均線TP", "🎯 週線均線TP", "🎯 日週均線TP交集",
@@ -1807,6 +2048,8 @@ def main():
         "🎯 日三役好轉", "🎯 週三役好轉", "🎯 日週三役好轉交集",
         # ★ V68.2：新增「5日內三役好轉」3 個 Tab
         "🎯 日5日內三役好轉", "🎯 週5日內三役好轉", "🎯 日週5日內三役好轉交集",
+        # ★ NEW：鱷魚線金叉 + 拋物線金叉
+        "🐊 鱷魚線金叉", "🎯 拋物線金叉",
     ])
     with tab1:
         render_tab_daily()
@@ -1874,6 +2117,11 @@ def main():
             weekly_date_key='weekly_gyakuten5d_date',
             csv_prefix='intersection_gyakuten5d',
             filter_label='5日內三役好轉')
+    # ★ NEW：鱷魚線金叉 + 拋物線金叉
+    with tab26:
+        render_tab_alligator_golden()
+    with tab27:
+        render_tab_sar_golden()
 
 
 if __name__ == "__main__":
