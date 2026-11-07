@@ -59,12 +59,14 @@ CATEGORICAL_FIELDS = [
       '偏強', '強勢', '超買／強勢', '極度超買', '資料不足'],
      True,
      ['極度超賣', '超賣', '弱勢反彈／超賣修復', '偏弱', '中性', '偏強']),
-    # ★ NEW：RSI（21）等級（預設與 StochRSI 相同）
-    ('RSI（21）等級',
+    # ★ NEW：RSI（14）等級（預設與 StochRSI 相同）
+    ('RSI（14）等級',
      ['極度超賣', '超賣', '弱勢反彈／超賣修復', '偏弱', '中性',
       '偏強', '強勢', '超買／強勢', '極度超買', '資料不足'],
      True,
      ['極度超賣', '超賣', '弱勢反彈／超賣修復', '偏弱', '中性', '偏強']),
+    # ★ NEW：RSI14連續3天
+    ('RSI14連續3天', ['O', 'X'], False, ['O']),
     # ★ NEW：RSI（6）趨勢
     ('RSI（6）趨勢', ['向上', '持平', '下降'], False, ['向上', '持平']),
     ('stochRSI最近交叉方向', ['金叉', '死叉'], True, ['金叉']),
@@ -1990,6 +1992,228 @@ def render_tab_sar_golden():
 
 
 # =========================
+# ★ NEW：3線糾結（日 / 週 / 日週交集）合併版
+# =========================
+def render_tab_3line_merged():
+    mode = st.radio(
+        "📊 顯示模式",
+        options=['日線', '週線', '日週交集'],
+        index=0,
+        horizontal=True,
+        key='3line_merged_mode',
+    )
+    if mode == '日線':
+        render_tab_3line('daily', 'daily_3line', "🎯 日線 3線糾結 + 紅K棒")
+    elif mode == '週線':
+        render_tab_3line('weekly', 'weekly_3line', "🎯 週線 3線糾結 + 紅K棒")
+    else:
+        render_tab_intersection_3line()
+
+
+# =========================
+# ★ NEW：均線TP（日 / 週 / 日週交集）合併版
+# =========================
+def render_tab_ma_ribbon_merged():
+    mode = st.radio(
+        "📊 顯示模式",
+        options=['日線', '週線', '日週交集'],
+        index=0,
+        horizontal=True,
+        key='ma_ribbon_merged_mode',
+    )
+    if mode == '日線':
+        render_tab_ma_ribbon('daily', 'daily_ribbon', "🎯 日線 均線TP")
+    elif mode == '週線':
+        render_tab_ma_ribbon('weekly', 'weekly_ribbon', "🎯 週線 均線TP")
+    else:
+        render_tab_intersection_ribbon()
+
+
+# =========================
+# ★ NEW：CCI穿越100（日 / 週 / 日週交集）合併版
+# =========================
+def render_tab_cci_merged():
+    mode = st.radio(
+        "📊 顯示模式",
+        options=['日線', '週線', '日週交集'],
+        index=0,
+        horizontal=True,
+        key='cci_merged_mode',
+    )
+    if mode == '日線':
+        render_tab_cci('daily', 'daily_cci', "🎯 日線 CCI穿越100")
+    elif mode == '週線':
+        render_tab_cci('weekly', 'weekly_cci', "🎯 週線 CCI穿越100")
+    else:
+        render_tab_intersection_cci()
+
+
+# =========================
+# ★ NEW：丹贊格（日 / 週 / 日週交集）合併版
+# =========================
+def render_tab_danzan_merged():
+    mode = st.radio(
+        "📊 顯示模式",
+        options=['日線', '週線', '日週交集'],
+        index=0,
+        horizontal=True,
+        key='danzan_merged_mode',
+    )
+    if mode == '日線':
+        render_tab_danzan('daily', 'daily_danzan', "🎯 丹贊格選股（日）")
+    elif mode == '週線':
+        render_tab_danzan('weekly', 'weekly_danzan', "🎯 丹贊格選股（週）")
+    else:
+        render_tab_intersection_danzan()
+
+
+# =========================
+# ★ NEW：Hull綠帶（日 / 週 / 日週交集）合併版
+# =========================
+def render_tab_hull_uptrend_merged():
+    mode = st.radio(
+        "📊 顯示模式",
+        options=['日線', '週線', '日週交集'],
+        index=0,
+        horizontal=True,
+        key='hull_uptrend_merged_mode',
+    )
+    if mode == '日線':
+        render_tab_hull_uptrend('daily', 'daily_hull', "🎯 Hull綠帶選股（日）")
+    elif mode == '週線':
+        render_tab_hull_uptrend('weekly', 'weekly_hull', "🎯 Hull綠帶選股（週）")
+    else:
+        render_tab_intersection_hull_uptrend()
+
+
+# =========================
+# ★ NEW：三役好轉（日 / 週 / 日週交集）合併版
+# =========================
+def render_tab_ichimoku_gyakuten_merged():
+    mode = st.radio(
+        "📊 顯示模式",
+        options=['日線', '週線', '日週交集'],
+        index=0,
+        horizontal=True,
+        key='gyakuten_merged_mode',
+    )
+    if mode == '日線':
+        render_tab_ichimoku_gyakuten(
+            'daily', 'daily_gyakuten', "🎯 日三役好轉",
+            filter_col='三役好轉',
+            filter_label='三役好轉',
+            filter_desc='三役好轉（今日剛發生）')
+    elif mode == '週線':
+        render_tab_ichimoku_gyakuten(
+            'weekly', 'weekly_gyakuten', "🎯 週三役好轉",
+            filter_col='三役好轉',
+            filter_label='三役好轉',
+            filter_desc='三役好轉（今日剛發生）')
+    else:
+        render_tab_intersection_ichimoku_gyakuten(
+            title="🔀 三役好轉日週交集",
+            daily_key='daily_gyakuten_result',
+            weekly_key='weekly_gyakuten_result',
+            daily_date_key='daily_gyakuten_date',
+            weekly_date_key='weekly_gyakuten_date',
+            csv_prefix='intersection_gyakuten',
+            filter_label='三役好轉')
+
+
+# =========================
+# ★ NEW：5日內三役好轉（日 / 週 / 日週交集）合併版
+# =========================
+def render_tab_ichimoku_gyakuten5d_merged():
+    mode = st.radio(
+        "📊 顯示模式",
+        options=['日線', '週線', '日週交集'],
+        index=0,
+        horizontal=True,
+        key='gyakuten5d_merged_mode',
+    )
+    if mode == '日線':
+        render_tab_ichimoku_gyakuten(
+            'daily', 'daily_gyakuten5d', "🎯 日5日內三役好轉",
+            filter_col='5日內三役好轉',
+            filter_label='5日內三役好轉',
+            filter_desc='5日內三役好轉（最後 5 根任一天發生）')
+    elif mode == '週線':
+        render_tab_ichimoku_gyakuten(
+            'weekly', 'weekly_gyakuten5d', "🎯 週5日內三役好轉",
+            filter_col='5日內三役好轉',
+            filter_label='5日內三役好轉',
+            filter_desc='5日內三役好轉（最後 5 根任一天發生）')
+    else:
+        render_tab_intersection_ichimoku_gyakuten(
+            title="🔀 5日內三役好轉日週交集",
+            daily_key='daily_gyakuten5d_result',
+            weekly_key='weekly_gyakuten5d_result',
+            daily_date_key='daily_gyakuten5d_date',
+            weekly_date_key='weekly_gyakuten5d_date',
+            csv_prefix='intersection_gyakuten5d',
+            filter_label='5日內三役好轉')
+
+
+# =========================
+# ★ NEW：最後日期 supertrend 翻紅（日 / 週 / 日週交集）
+# =========================
+def render_tab_supertrend_flip_red():
+    st.header("🎯 最後日期supertrend翻紅")
+
+    dates = list_simply_dates()
+    if not dates:
+        st.error("❌ 找不到任何 simply_report 檔案")
+        return
+    date_str = dates[0]
+    st.caption(
+        f"📅 日期鎖定為最新交易日：**{date_str}**（此頁面不受側邊欄日期影響）"
+    )
+
+    mode = st.radio(
+        "📊 顯示模式",
+        options=['日線', '週線', '日週交集'],
+        index=0,
+        horizontal=True,
+        key='supertrend_flip_red_mode',
+    )
+
+    col_flag = '最後日期supertrend翻紅'
+    label = 'supertrend翻紅'
+
+    if mode == '日線':
+        _render_flag_filter_single(date_str, 'daily', col_flag,
+                                    'daily_supertrend_flip_red',
+                                    f'{label}（日）')
+    elif mode == '週線':
+        _render_flag_filter_single(date_str, 'weekly', col_flag,
+                                    'weekly_supertrend_flip_red',
+                                    f'{label}（週）')
+    else:
+        _render_flag_filter_intersection(date_str, col_flag,
+                                          'supertrend_flip_red_intersection',
+                                          label)
+
+
+# =========================
+# ★ NEW：初始日週指標（日線 / 週線 / 日週交集）合併版
+# =========================
+def render_tab_initial_merged():
+    mode = st.radio(
+        "📊 顯示模式",
+        options=['日線', '週線', '日週交集'],
+        index=0,
+        horizontal=True,
+        key='initial_merged_mode',
+    )
+    if mode == '日線':
+        render_tab_daily()
+    elif mode == '週線':
+        render_tab_weekly()
+    else:
+        render_tab_intersection()
+
+
+# =========================
 # 側邊欄（只放全域設定）
 # =========================
 def build_sidebar():
@@ -2032,96 +2256,46 @@ def main():
 
     build_sidebar()
 
-    (tab1, tab2, tab3, tab4, tab5, tab6,
-     tab7, tab8, tab9, tab10, tab11, tab12, tab13,
-     tab14, tab15, tab16, tab17, tab18, tab19,
-     tab20, tab21, tab22,
-     tab23, tab24, tab25,
-     tab26, tab27) = st.tabs([
-        "🔵 日線", "🟢 週線", "🔀 日週交集",
-        "🎯 日線3線糾結", "🎯 週線3線糾結", "🎯 日週3線交集",
-        "🎯 日線均線TP", "🎯 週線均線TP", "🎯 日週均線TP交集",
-        "🎯 日線CCI穿越100", "🎯 週線CCI穿越100", "🎯 日週CCI交集",
+    (tab1, tab2, tab3, tab4,
+     tab5, tab6, tab7, tab8,
+     tab9, tab10, tab11, tab12) = st.tabs([
+        "🔵 初始日週指標",
+        "🎯 3線糾結",
+        "🎯 均線TP",
+        "🎯 CCI穿越100",
         "🎯 日週Mansfield交集",
-        "🎯 丹贊格選股（日）", "🎯 丹贊格選股（週）", "🎯 丹贊格日週交集",
-        "🎯 Hull綠帶選股（日）", "🎯 Hull綠帶選股（週）", "🎯 Hull綠帶日週交集",
-        "🎯 日三役好轉", "🎯 週三役好轉", "🎯 日週三役好轉交集",
-        # ★ V68.2：新增「5日內三役好轉」3 個 Tab
-        "🎯 日5日內三役好轉", "🎯 週5日內三役好轉", "🎯 日週5日內三役好轉交集",
-        # ★ NEW：鱷魚線金叉 + 拋物線金叉
-        "🐊 鱷魚線金叉", "🎯 拋物線金叉",
+        "🎯 丹贊格",
+        "🎯 Hull綠帶",
+        "🎯 三役好轉",
+        "🎯 5日內三役好轉",
+        "🐊 鱷魚線金叉",
+        "🎯 拋物線金叉",
+        "🎯 supertrend翻紅",
     ])
     with tab1:
-        render_tab_daily()
+        render_tab_initial_merged()
     with tab2:
-        render_tab_weekly()
+        render_tab_3line_merged()
     with tab3:
-        render_tab_intersection()
+        render_tab_ma_ribbon_merged()
     with tab4:
-        render_tab_3line('daily', 'daily_3line', "🎯 日線 3線糾結 + 紅K棒")
+        render_tab_cci_merged()
     with tab5:
-        render_tab_3line('weekly', 'weekly_3line', "🎯 週線 3線糾結 + 紅K棒")
-    with tab6:
-        render_tab_intersection_3line()
-    with tab7:
-        render_tab_ma_ribbon('daily', 'daily_ribbon', "🎯 日線 均線TP")
-    with tab8:
-        render_tab_ma_ribbon('weekly', 'weekly_ribbon', "🎯 週線 均線TP")
-    with tab9:
-        render_tab_intersection_ribbon()
-    with tab10:
-        render_tab_cci('daily', 'daily_cci', "🎯 日線 CCI穿越100")
-    with tab11:
-        render_tab_cci('weekly', 'weekly_cci', "🎯 週線 CCI穿越100")
-    with tab12:
-        render_tab_intersection_cci()
-    with tab13:
         render_tab_intersection_mansfield()
-    with tab14:
-        render_tab_danzan('daily', 'daily_danzan', "🎯 丹贊格選股（日）")
-    with tab15:
-        render_tab_danzan('weekly', 'weekly_danzan', "🎯 丹贊格選股（週）")
-    with tab16:
-        render_tab_intersection_danzan()
-    with tab17:
-        render_tab_hull_uptrend('daily', 'daily_hull', "🎯 Hull綠帶選股（日）")
-    with tab18:
-        render_tab_hull_uptrend('weekly', 'weekly_hull', "🎯 Hull綠帶選股（週）")
-    with tab19:
-        render_tab_intersection_hull_uptrend()
-    with tab20:
-        render_tab_ichimoku_gyakuten('daily', 'daily_gyakuten', "🎯 日三役好轉")
-    with tab21:
-        render_tab_ichimoku_gyakuten('weekly', 'weekly_gyakuten', "🎯 週三役好轉")
-    with tab22:
-        render_tab_intersection_ichimoku_gyakuten()
-    # ★ V68.2：5日內三役好轉 3 個 Tab
-    with tab23:
-        render_tab_ichimoku_gyakuten(
-            'daily', 'daily_gyakuten5d', "🎯 日5日內三役好轉",
-            filter_col='5日內三役好轉',
-            filter_label='5日內三役好轉',
-            filter_desc='5日內三役好轉（最後 5 根任一天發生）')
-    with tab24:
-        render_tab_ichimoku_gyakuten(
-            'weekly', 'weekly_gyakuten5d', "🎯 週5日內三役好轉",
-            filter_col='5日內三役好轉',
-            filter_label='5日內三役好轉',
-            filter_desc='5日內三役好轉（最後 5 根任一天發生）')
-    with tab25:
-        render_tab_intersection_ichimoku_gyakuten(
-            title="🔀 5日內三役好轉日週交集",
-            daily_key='daily_gyakuten5d_result',
-            weekly_key='weekly_gyakuten5d_result',
-            daily_date_key='daily_gyakuten5d_date',
-            weekly_date_key='weekly_gyakuten5d_date',
-            csv_prefix='intersection_gyakuten5d',
-            filter_label='5日內三役好轉')
-    # ★ NEW：鱷魚線金叉 + 拋物線金叉
-    with tab26:
+    with tab6:
+        render_tab_danzan_merged()
+    with tab7:
+        render_tab_hull_uptrend_merged()
+    with tab8:
+        render_tab_ichimoku_gyakuten_merged()
+    with tab9:
+        render_tab_ichimoku_gyakuten5d_merged()
+    with tab10:
         render_tab_alligator_golden()
-    with tab27:
+    with tab11:
         render_tab_sar_golden()
+    with tab12:
+        render_tab_supertrend_flip_red()
 
 
 if __name__ == "__main__":
