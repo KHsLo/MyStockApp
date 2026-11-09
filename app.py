@@ -2195,6 +2195,48 @@ def render_tab_supertrend_flip_red():
 
 
 # =========================
+# ★ NEW：最後交易日一目均衡金叉（日 / 週 / 日週交集）
+#   - 硬過濾：最後交易日一目均衡金叉 == 'O'
+#   - 定義：最後一根 K 棒 轉換線 HMA7 > 基準線 HMA22
+# =========================
+def render_tab_ichimoku_golden():
+    st.header("🎯 最後交易日一目均衡金叉")
+
+    dates = list_simply_dates()
+    if not dates:
+        st.error("❌ 找不到任何 simply_report 檔案")
+        return
+    date_str = dates[0]
+    st.caption(
+        f"📅 日期鎖定為最新交易日：**{date_str}**（此頁面不受側邊欄日期影響）"
+    )
+
+    mode = st.radio(
+        "📊 顯示模式",
+        options=['日線', '週線', '日週交集'],
+        index=0,
+        horizontal=True,
+        key='ichimoku_golden_mode',
+    )
+
+    col_flag = '最後交易日一目均衡金叉'
+    label = '一目均衡金叉'
+
+    if mode == '日線':
+        _render_flag_filter_single(date_str, 'daily', col_flag,
+                                    'daily_ichimoku_golden',
+                                    f'{label}（日）')
+    elif mode == '週線':
+        _render_flag_filter_single(date_str, 'weekly', col_flag,
+                                    'weekly_ichimoku_golden',
+                                    f'{label}（週）')
+    else:
+        _render_flag_filter_intersection(date_str, col_flag,
+                                          'ichimoku_golden_intersection',
+                                          label)
+
+
+# =========================
 # ★ NEW：初始日週指標（日線 / 週線 / 日週交集）合併版
 # =========================
 def render_tab_initial_merged():
@@ -2258,7 +2300,8 @@ def main():
 
     (tab1, tab2, tab3, tab4,
      tab5, tab6, tab7, tab8,
-     tab9, tab10, tab11, tab12) = st.tabs([
+     tab9, tab10, tab11, tab12,
+     tab13) = st.tabs([
         "🔵 初始日週指標",
         "🎯 3線糾結",
         "🎯 均線TP",
@@ -2268,6 +2311,7 @@ def main():
         "🎯 Hull綠帶",
         "🎯 三役好轉",
         "🎯 5日內三役好轉",
+        "🎯 一目均衡金叉",
         "🐊 鱷魚線金叉",
         "🎯 拋物線金叉",
         "🎯 supertrend翻紅",
@@ -2291,10 +2335,12 @@ def main():
     with tab9:
         render_tab_ichimoku_gyakuten5d_merged()
     with tab10:
-        render_tab_alligator_golden()
+        render_tab_ichimoku_golden()
     with tab11:
-        render_tab_sar_golden()
+        render_tab_alligator_golden()
     with tab12:
+        render_tab_sar_golden()
+    with tab13:
         render_tab_supertrend_flip_red()
 
 
