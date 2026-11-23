@@ -2254,6 +2254,79 @@ def render_tab_initial_merged():
     else:
         render_tab_intersection()
 
+# =========================
+# ★ NEW：突破週20MA（日 / 週 / 日週交集 + 突破/在之上二擇一）
+#   - 過濾條件一：股價突破週20MA（事件：T-1 收盤<=週20MA、T 收盤>週20MA、T 紅K）
+#   - 過濾條件二：股價是否在週20MA之上（狀態：T 收盤>週20MA）
+#   - 日期鎖定為最新交易日
+# =========================
+def render_tab_weekly_ma20_breakout():
+    st.header("🎯 股價突破週20MA")
+
+    dates = list_simply_dates()
+    if not dates:
+        st.error("❌ 找不到任何 simply_report 檔案")
+        return
+    date_str = dates[0]
+    st.caption(
+        f"📅 日期鎖定為最新交易日：**{date_str}**（此頁面不受側邊欄日期影響）"
+    )
+
+    # ---- 第一層：過濾條件（突破 / 在之上）----
+    filter_choice = st.radio(
+        "🔍 篩選條件",
+        options=[
+            '股價突破週20MA',
+            '股價是否在週20MA之上',
+        ],
+        index=0,
+        horizontal=True,
+        key='weekly_ma20_filter_choice',
+        help='突破週20MA：事件型（只在突破當天標 O）\n'
+             '在週20MA之上：狀態型（收盤在 20MA 上就標 O）',
+    )
+
+    is_breakout = (filter_choice == '股價突破週20MA')
+    col_flag = '股價突破週20MA' if is_breakout else '股價是否在週20MA之上'
+    label = '突破週20MA' if is_breakout else '在週20MA之上'
+    filter_key = 'breakout' if is_breakout else 'above'
+
+    # 顯示說明
+    if is_breakout:
+        st.caption(
+            "📖 定義：**T-1 收盤 ≤ 週20MA** 且 **T 收盤 > 週20MA** 且 "
+            "**T 為紅K棒**（前一日尚未突破、今日突破）"
+        )
+    else:
+        st.caption(
+            "📖 定義：**T 收盤 > 週20MA**（狀態型，只要收盤在 20MA 上方即符合）"
+        )
+
+    # ---- 第二層：顯示模式（日 / 週 / 交集）----
+    mode = st.radio(
+        "📊 顯示模式",
+        options=['日線', '週線', '日週交集'],
+        index=0,
+        horizontal=True,
+        key=f'weekly_ma20_mode_{filter_key}',
+    )
+
+    if mode == '日線':
+        _render_flag_filter_single(
+            date_str, 'daily', col_flag,
+            f'daily_weekly_ma20_{filter_key}',
+            f'{label}（日）')
+    elif mode == '週線':
+        _render_flag_filter_single(
+            date_str, 'weekly', col_flag,
+            f'weekly_weekly_ma20_{filter_key}',
+            f'{label}（週）')
+    else:
+        _render_flag_filter_intersection(
+            date_str, col_flag,
+            f'weekly_ma20_intersection_{filter_key}',
+            label)
+
 
 # =========================
 # 側邊欄（只放全域設定）
@@ -2301,7 +2374,7 @@ def main():
     (tab1, tab2, tab3, tab4,
      tab5, tab6, tab7, tab8,
      tab9, tab10, tab11, tab12,
-     tab13) = st.tabs([
+     tab13, tab14) = st.tabs([
         "🔵 初始日週指標",
         "🎯 3線糾結",
         "🎯 均線TP",
@@ -2315,6 +2388,7 @@ def main():
         "🐊 鱷魚線金叉",
         "🎯 拋物線金叉",
         "🎯 supertrend翻紅",
+        "🎯 突破週20MA",
     ])
     with tab1:
         render_tab_initial_merged()
@@ -2342,6 +2416,8 @@ def main():
         render_tab_sar_golden()
     with tab13:
         render_tab_supertrend_flip_red()
+    with tab14:
+        render_tab_weekly_ma20_breakout()
 
 
 if __name__ == "__main__":
